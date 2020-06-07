@@ -7,6 +7,12 @@ import json
 
 ### 基础处理函数
 def clean_portfolio(portfolio):
+    ''' 清洗portfolio活动信息
+    Args:
+        portfolio(df): 原始活动信息表
+    Returns:
+        portfolio(df): 重命名字段名、扩展字段后的活动信息表
+    '''
     portfolio['duration_hour'] = portfolio['duration']*24
     portfolio = portfolio.rename(columns={'id':'offerid', 'duration':'duration_day'})
     
@@ -18,7 +24,13 @@ def clean_portfolio(portfolio):
     portfolio = portfolio.reset_index()
     return portfolio
 
-def clean_profile(profile):  
+def clean_profile(profile): 
+    ''' 清洗profile用户信息
+    Args:
+        profile(df): 原始用户信息表
+    Returns:
+        profile(df): 去除年龄异常值、重命名字段名、扩展字段后的用户信息表
+    ''' 
     profile = profile.rename(columns={'id':'cid'})
     
     # 有2000多个年龄异常(118岁)，这部分用户没有收入和性别信息，剔除
@@ -27,7 +39,7 @@ def clean_profile(profile):
     
     # 加字段
     profile['became_member_year'] = profile['became_member_on'].astype(str).apply(lambda x: x[:4]).astype(int)
-    profile['became_member_year'] = pd.cut(profile['became_member_year'], bins=[2012,2015,2017,2018])
+    profile['became_member_year'] = pd.cut(profile['became_member_year'], bins=[2012,2014,2016,2018])
     profile['age_range'] = pd.cut(profile['age'], bins=[17,35,55,75,100])
     profile['income'] = profile['income']/1000
     profile['income_range'] = pd.cut(profile['income'], bins=[29,45,60,75,90,120])
@@ -35,22 +47,36 @@ def clean_profile(profile):
     return profile
 
 
-def draw_hist_pics(profile1, cols=[], hue='gender'):
-    for i,col in enumerate(profile1[cols].columns):
+def draw_hist_pics(df, cols=[], hue='gender'):
+    ''' 遍历数据列，画直方图，默认用颜色区分性别
+    Args:
+        df(df): 需要画直方图的数据框
+        cols(list): 需要画图的所有列
+        hue(string): 分类变量，默认性别
+    Returns:
+        无
+    '''
+    for i,col in enumerate(df[cols].columns):
         if col != hue:
-            g = sns.FacetGrid(profile1[cols], size = 3,aspect = 1.5, hue = hue,palette='deep'\
-                              ,hue_order= sorted(profile1[hue].unique()))
+            g = sns.FacetGrid(df[cols], size = 3,aspect = 1.5, hue = hue,palette='deep'\
+                              ,hue_order= sorted(df[hue].unique()))
             g.map(plt.hist,col,alpha=0.6)
             plt.title('Distribution of '+ col)
-            plt.axvline(profile1.query("gender == 'F'")[col].mean(), c='b')
-            plt.axvline(profile1.query("gender == 'M'")[col].mean(), c='orange')
+            plt.axvline(df.query("gender == 'F'")[col].mean(), c='b')
+            plt.axvline(df.query("gender == 'M'")[col].mean(), c='orange')
             g.add_legend()
             plt.show();
 
 
 
 ### 整合表的函数
-def parse_offer(value):  
+def parse_offer(value): 
+    ''' 清洗交易数据记录里的value字段
+    Args:
+        value(json): 交易数据记录里的value
+    Returns:
+        value(string): 取出的offerid
+    ''' 
     if 'offer id' in value.keys():
         value = value['offer id']
     elif 'offer_id' in value.keys():
@@ -60,7 +86,16 @@ def parse_offer(value):
     return  value
 
 def sep_df(transcript,  portfolio):
-    
+     ''' 分离交易记录表里的四类记录数据，包括接收offer、浏览offer、完成offer，以及所有交易金额记录
+    Args:
+        transcript(json): 交易数据记录
+        portfolio(df):所有用户信息，接收记录和交易记录中，只保留有用户信息的用户记录
+    Returns:
+        received (df): 用户接收offer记录
+        viewed(df): 用户浏览offer记录
+        completed(df): 用户完成offer记录
+        transaction(df): 用户所有交易金额记录
+    ''' 
     transcript['offer'] = transcript.value.apply(lambda v : parse_offer(v))
     transcript['amount'] = transcript.value.apply(lambda x : x['amount'] if 'amount' in x.keys() else np.nan)
     
@@ -95,7 +130,13 @@ def sep_df(transcript,  portfolio):
 
 
 def is_valid_viewed(row):
-    # 判断是否为有效浏览：offer浏览时间在收到时间之后，并且offer在有效期内
+    ''' 判断是否为有效浏览
+    Args:
+        row (pd.Series): 
+    Returns:
+        1或0: 是否有效浏览
+    ''' 
+    # 有效浏览：offer浏览时间在收到时间之后，并且offer在有效期内
     view_hour_after_receive = row.viewed_time - row.received_time
     
     if view_hour_after_receive <= row.duration_hour and view_hour_after_receive>=0:            
@@ -104,7 +145,13 @@ def is_valid_viewed(row):
         return 0
 
 def is_valid_comp(row):
-    # 判断消费是否受到offer影响：offer在有效期内，offer交易时间在浏览时间之后，并且消费金额满足offer最低消费限制
+    ''' 判断消费是否受到offer影响
+    Args:
+        row (pd.Series) 
+    Returns:
+        1或0: 是否受offer影响
+    ''' 
+    # 交易是否受到offer影响：offer在有效期内，offer交易时间在浏览时间之后，并且消费金额满足offer最低消费限制
     trans_hour_after_receive = row.transaction_time - row.received_time
     
     if trans_hour_after_receive <= row.duration_hour and trans_hour_after_receive>=0 \
@@ -114,8 +161,54 @@ def is_valid_comp(row):
         return 0
 
 
-        
+def clean_received_info(received_info, viewed,transaction):
+    ''' 清洗信息类offer接收记录
+    Args:
+        received_info (df): 信息类offer接收记录
+        viewed (df): 用户浏览offer记录
+        transaction (df): 用户交易记录
+    Returns:
+        received_info_view (df):  信息类offer有效浏览记录
+        received_info_view_comp (df): 信息类offer最终响应(完成)记录
+    ''' 
+    # 保留满足条件的浏览记录
+    received_info_view = pd.merge(received_info,viewed,  how='left', left_on=['cid','received_offer'],\
+                right_on=['cid','viewed_offer']).drop('viewed_offer',axis=1)
+    received_info_view['is_valid_viewed'] = received_info_view .apply(lambda row: is_valid_viewed(row), axis=1)
+    received_info_view = received_info_view.query("is_valid_viewed==1")
+
+    # 同一个cid、offer和offer接收时间后续有多次浏览的，只将后续最近一次浏览算作对该offer的浏览
+    received_info_view = received_info_view.assign(view_rn = received_info_view\
+                                                            .sort_values(by=['viewed_time'], ascending=True)\
+                                             .groupby(['cid','received_offer','received_time'])\
+                                             .cumcount()+1)
+    received_info_view = received_info_view.query("view_rn==1").reset_index().drop('index',axis=1)
+    
+    # 保留满足条件的交易记录，根据用户连接
+    received_info_view_comp = pd.merge(received_info_view,transaction,how='left',on='cid')
+    received_info_view_comp['is_valid_comp'] = received_info_view_comp.apply(lambda row: is_valid_comp(row), axis=1)
+    received_info_view_comp = received_info_view_comp.query("is_valid_comp==1")
+
+    # 同一个cid、offer和offer接收时间后续有多次交易的，只将后续最近一次交易算作对该offer的最终响应
+    received_info_view_comp = received_info_view_comp.assign(comp_rn = received_info_view_comp\
+                                             .sort_values(by=['transaction_time'], ascending=True)\
+                                             .groupby(['cid','received_offer','received_time','viewed_time'])\
+                                             .cumcount()+1)
+    received_info_view_comp = received_info_view_comp.query("comp_rn==1").reset_index().drop('index',axis=1)
+    
+    
+    return received_info_view, received_info_view_comp
+
 def clean_received_other(received_other, viewed,completed):
+    ''' 清洗bogo和折扣类offer接收记录
+    Args:
+        received_other (df): bogo和折扣类offer接收记录
+        viewed (df): 用户浏览offer记录
+        transaction (df): 用户交易记录
+    Returns:
+        received_other_view (df):  bogo和折扣类offer有效浏览记录
+        received_other_view_comp (df): bogo和折扣类offer最终响应(完成)记录
+    ''' 
     # 保留满足条件的浏览记录
     received_other_view = pd.merge(received_other,viewed,  how='left', left_on=['cid','received_offer'],\
                 right_on=['cid','viewed_offer']).drop('viewed_offer',axis=1)
@@ -148,39 +241,22 @@ def clean_received_other(received_other, viewed,completed):
     return received_other_view, received_other_view_comp
 
 
-def clean_received_info(received_info, viewed,transaction):
-    
-    # 保留满足条件的浏览记录
-    received_info_view = pd.merge(received_info,viewed,  how='left', left_on=['cid','received_offer'],\
-                right_on=['cid','viewed_offer']).drop('viewed_offer',axis=1)
-    received_info_view['is_valid_viewed'] = received_info_view .apply(lambda row: is_valid_viewed(row), axis=1)
-    received_info_view = received_info_view.query("is_valid_viewed==1")
-
-    # 同一个cid、offer和offer接收时间后续有多次浏览的，只将后续最近一次浏览算作对该offer的浏览
-    received_info_view = received_info_view.assign(view_rn = received_info_view\
-                                                            .sort_values(by=['viewed_time'], ascending=True)\
-                                             .groupby(['cid','received_offer','received_time'])\
-                                             .cumcount()+1)
-    received_info_view = received_info_view.query("view_rn==1").reset_index().drop('index',axis=1)
-    
-    # 保留满足条件的交易记录，根据用户连接
-    received_info_view_comp = pd.merge(received_info_view,transaction,how='left',on='cid')
-    received_info_view_comp['is_valid_comp'] = received_info_view_comp.apply(lambda row: is_valid_comp(row), axis=1)
-    received_info_view_comp = received_info_view_comp.query("is_valid_comp==1")
-
-    # 同一个cid、offer和offer接收时间后续有多次交易的，只将后续最近一次交易算作对该offer的最终响应
-    received_info_view_comp = received_info_view_comp.assign(comp_rn = received_info_view_comp\
-                                             .sort_values(by=['transaction_time'], ascending=True)\
-                                             .groupby(['cid','received_offer','received_time','viewed_time'])\
-                                             .cumcount()+1)
-    received_info_view_comp = received_info_view_comp.query("comp_rn==1").reset_index().drop('index',axis=1)
-    
-    
-    return received_info_view, received_info_view_comp
-
-
 def clean_response(received,viewed,completed,transaction,received_info,received_other):
-
+    ''' 综合之前的清洗逻辑，输出响应标识表
+    Args:
+        received (df): 所有offer接收记录
+        viewed (df): 所有浏览offer记录
+        completed (df): 用户完成bogo和折扣类offer记录
+        transaction (df): 所有用户交易记录
+        received_info (df): 信息类offer接收记录
+        received_other (df): 其他offer接收记录
+    Returns:
+        received_view (df): 接收-offer有效浏览联合表
+        received_view_comp(df): 接收-offer有效浏览且完成联合表
+        transaction_response (df) :  交易-offer响应联合表 *** 重要
+        response (df) :  offer纯响应记录表
+        received_response (df) : 接收-offer响应联合表 *** 重要
+    ''' 
     received_other_view, received_other_view_comp = clean_received_other(received_other,viewed,completed)
     received_info_view, received_info_view_comp = clean_received_info(received_info,viewed,transaction)
     
@@ -219,18 +295,18 @@ def clean_response(received,viewed,completed,transaction,received_info,received_
     received_response['is_response'] = received_response.is_response.fillna(0).astype(int)
 
     
-    
-    # 输出：
-    # 1.接收-offer浏览联合表
-    # 2.接收-offer浏览且完成联合表
-    # 3.交易-offer响应联合表 ** 重要
-    # 4.offer响应记录表
-    # 5.接收-offer响应联合表 ** 重要
     return received_view, received_view_comp, transaction_response, response, received_response
 
 
 
 def clean_cid_stats(received_response_cid, transaction_response_cid):
+    ''' 统计每个用户的offer和交易相关指标数据
+    Args:
+        received_response_cid (df): 接收+offer响应+用户信息联合表
+        transaction_response_cid(df): 交易+offer完成+用户信息联合表
+    Returns:
+        cid_stats (df):  输出用户统计表
+    ''' 
     received_response_cid1 = received_response_cid.join(pd.get_dummies(received_response_cid['offer_type']))
     
     cid_group1 = received_response_cid1.groupby("cid")
@@ -269,13 +345,26 @@ def clean_cid_stats(received_response_cid, transaction_response_cid):
     return cid_stats
 
 
-### 以下为特征处理类函数
-
 def calc_ratio(df, col1, col2, new_ratio_col):
+    ''' 比例指标计算
+    Args:
+        df (df): 要计算比例指标的表
+        col1  (string): 分子列
+        col2 （string): 分母列
+        new_ratio_col （string）:输出比例的字段名
+    Returns:
+        df(df): 增加比例字段后的表
+    ''' 
     df[new_ratio_col] = df[col1]/df[col2]
     return df
 
 def add_feature_cols(cid_with_offer):
+    ''' 用户统计表，增加几个比例指标
+    Args:
+        cid_with_offer(df): 用户统计表
+    Returns:
+        cid_with_offer(df): 增加比例字段后的表
+    ''' 
     # offer交易次数占比，衡量用户总体的活动偏好水平
     col1 = 'is_offer_tr_sum'
     col2 = 'transaction_time_tr_count'
@@ -324,6 +413,16 @@ def add_feature_cols(cid_with_offer):
 
 ### 查看用户群特征
 def find_cid_groups(df, feature_groups, metric, condition='==1'):
+    ''' 查看用户分组
+    Args:
+        df(df): 用户特征表
+        feature_groups (list): 用户特征字段list，用于groubby
+        metric (string): 要限制的活动offer相关字段
+        condition(string): 要限制的活动offer字段条件
+    Returns:
+       col_like (df): 特定活动offer条件下的原始用户分组数据
+       col_like_cid_groups (df): 特定活动offer条件下的,排序靠前的用户分组数据
+    ''' 
     col_like = df.query("{0}{1}".format(metric,condition)).groupby(feature_groups)\
                         .agg({metric:['count'],
                               'amount_tr_mean':['mean'],
