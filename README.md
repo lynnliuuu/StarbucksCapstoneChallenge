@@ -6,12 +6,12 @@
 之所以选择练习该项目，是因为这类业务逻辑在电商、广告、内容、O2O等领域是比较相似和通用的，方法可以直接应用到工作中。
 
 依赖的库：
-pandas
-numpy
-matplotlib.pyplot 
-seaborn
-json
-statsmodels.api
+- pandas
+- numpy
+- matplotlib.pyplot 
+- seaborn
+- json
+- statsmodels.api
 
 ### 业务背景
 每隔几天，星巴克会向 app 的用户发送一些推送，这个推送可能是饮品的广告、折扣券或 BOGO（买一送一）。
@@ -59,17 +59,17 @@ statsmodels.api
 
 #### clean_data.py 
 包括所有数据清洗函数，主要函数功能：
-clean_portfolio：清洗portfolio活动offer信息
-clean_profile：清洗profile用户信息
-draw_hist_pics：遍历数据列，画直方图，默认用颜色区分性别
-parse_offer：清洗交易数据记录transcript里的value字段
-sep_df：分离交易记录表里的四类记录数据，包括接收offer、浏览offer、完成offer，以及所有交易金额记录
-is_valid_viewed：判断是否为有效浏览
-is_valid_comp：判断消费是否受到offer影响,也即按照业务逻辑，offer是否真正完成
-clean_response：主要输出每个发出的offer是否真正完成/被响应的标识，包括接收记录+响应标识，和交易记录+是否活动交易+活动offer等明细记录
-clean_cid_stats：输出用户的offer接收、交易记录统计数据
-add_feature_cols：计算用户对活动要素的偏好指标
-find_cid_groups：查看特定偏好的用户群数据，发现用户群特征
+- clean_portfolio：清洗portfolio活动offer信息
+- clean_profile：清洗profile用户信息
+- draw_hist_pics：遍历数据列，画直方图，默认用颜色区分性别
+- parse_offer：清洗交易数据记录transcript里的value字段
+- sep_df：分离交易记录表里的四类记录数据，包括接收offer、浏览offer、完成offer，以及所有交易金额记录
+- is_valid_viewed：判断是否为有效浏览
+- is_valid_comp：判断消费是否受到offer影响,也即按照业务逻辑，offer是否真正完成
+- clean_response：主要输出每个发出的offer是否真正完成/被响应的标识，包括接收记录+响应标识，和交易记录+是否活动交易+活动offer等明细记录
+- clean_cid_stats：输出用户的offer接收、交易记录统计数据
+- add_feature_cols：计算用户对活动要素的偏好指标
+- find_cid_groups：查看特定偏好的用户群数据，发现用户群特征
 
 
 #### Starbucks_Capstone_notebook-zh.ipynb 
