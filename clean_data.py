@@ -86,7 +86,7 @@ def parse_offer(value):
     return  value
 
 def sep_df(transcript,  portfolio):
-     ''' 分离交易记录表里的四类记录数据，包括接收offer、浏览offer、完成offer，以及所有交易金额记录
+    ''' 分离交易记录表里的四类记录数据，包括接收offer、浏览offer、完成offer，以及所有交易金额记录
     Args:
         transcript(json): 交易数据记录
         portfolio(df):所有用户信息，接收记录和交易记录中，只保留有用户信息的用户记录
@@ -97,6 +97,7 @@ def sep_df(transcript,  portfolio):
         transaction(df): 用户所有交易金额记录
     ''' 
     transcript['offer'] = transcript.value.apply(lambda v : parse_offer(v))
+
     transcript['amount'] = transcript.value.apply(lambda x : x['amount'] if 'amount' in x.keys() else np.nan)
     
     received = transcript.query("event == 'offer received'")\
@@ -145,7 +146,7 @@ def is_valid_viewed(row):
         return 0
 
 def is_valid_comp(row):
-    ''' 判断消费是否受到offer影响
+    ''' 判断消费是否受到offer影响,也即按照业务逻辑，offer是否真正完成
     Args:
         row (pd.Series) 
     Returns:
@@ -242,7 +243,7 @@ def clean_received_other(received_other, viewed,completed):
 
 
 def clean_response(received,viewed,completed,transaction,received_info,received_other):
-    ''' 综合之前的清洗逻辑，输出响应标识表
+    ''' 综合之前的清洗逻辑，输出offer是否真正被响应的标识
     Args:
         received (df): 所有offer接收记录
         viewed (df): 所有浏览offer记录
